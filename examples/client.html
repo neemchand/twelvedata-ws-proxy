@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twelve Data WebSocket Proxy - Client Example</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --success-bg: #d4edda;
+            --success-text: #155724;
+            --danger-bg: #f8d7da;
+            --danger-text: #721c24;
+            --disabled-bg: #6c757d;
+            --border-color: #ddd;
+            --background-color: #f5f5f5;
+            --card-background: white;
+            --text-success: #28a745;
+            --text-danger: #dc3545;
+            --messages-bg: #f8f9fa;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--background-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            background: var(--card-background);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #333;
+            text-align: center;
+        }
+
+        .status {
+            padding: 12px 16px;
+            margin: 15px 0;
+            border-radius: 6px;
+            font-weight: 600;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .connected {
+            background-color: var(--success-bg);
+            color: var(--success-text);
+        }
+
+        .disconnected {
+            background-color: var(--danger-bg);
+            color: var(--danger-text);
+        }
+
+        .controls {
+            margin: 25px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        input, button {
+            padding: 10px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        input {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            cursor: pointer;
+            border: none;
+            font-weight: 500;
+            min-width: 100px;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            background-color: var(--disabled-bg);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .messages {
+            height: 350px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            background-color: var(--messages-bg);
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            border-radius: 6px;
+            line-height: 1.4;
+        }
+
+        .messages::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .messages::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        .messages::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        .price-update {
+            color: var(--text-success);
+            font-weight: bold;
+        }
+
+        .error {
+            color: var(--text-danger);
+            font-weight: 500;
+        }
+
+        .message-line {
+            margin-bottom: 4px;
+            padding: 2px 0;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            .control-group {
+                flex-direction: column;
+            }
+
+            input {
+                min-width: 100%;
+            }
+
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Twelve Data WebSocket Proxy</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">Real-time stock price streaming client</p>
+
+        <div id="status" class="status disconnected">Disconnected</div>
+
+        <div class="controls">
+            <div class="control-group">
+                <button id="connectBtn">Connect</button>
+                <button id="disconnectBtn" disabled>Disconnect</button>
+            </div>
+
+            <div class="control-group">
+                <input
+                    type="text"
+                    id="symbolInput"
+                    placeholder="Enter symbols (e.g., AAPL,GOOGL,MSFT)"
+                    value="AAPL,GOOGL,MSFT"
+                >
+                <button id="subscribeBtn" disabled>Subscribe</button>
+                <button id="unsubscribeBtn" disabled>Unsubscribe</button>
+            </div>
+        </div>
+
+        <div class="messages" id="messages"></div>
+    </div>
+
+    <script>
+        class WebSocketClient {
+            constructor() {
+                this.ws = null;
+                this.isConnected = false;
+                this.initializeElements();
+                this.bindEvents();
+                this.updateUI();
+            }
+
+            initializeElements() {
+                this.elements = {
+                    status: document.getElementById('status'),
+                    messages: document.getElementById('messages'),
+                    connectBtn: document.getElementById('connectBtn'),
+                    disconnectBtn: document.getElementById('disconnectBtn'),
+                    subscribeBtn: document.getElementById('subscribeBtn'),
+                    unsubscribeBtn: document.getElementById('unsubscribeBtn'),
+                    symbolInput: document.getElementById('symbolInput')
+                };
+            }
+
+            bindEvents() {
+                this.elements.connectBtn.addEventListener('click', () => this.connect());
+                this.elements.disconnectBtn.addEventListener('click', () => this.disconnect());
+                this.elements.subscribeBtn.addEventListener('click', () => this.subscribe());
+                this.elements.unsubscribeBtn.addEventListener('click', () => this.unsubscribe());
+
+                // Allow Enter key to subscribe
+                this.elements.symbolInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !this.elements.subscribeBtn.disabled) {
+                        this.subscribe();
+                    }
+                });
+            }
+
+            addMessage(message, className = '') {
+                const div = document.createElement('div');
+                div.className = `message-line ${className}`;
+                div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                this.elements.messages.appendChild(div);
+                this.elements.messages.scrollTop = this.elements.messages.scrollHeight;
+            }
+
+            updateUI() {
+                if (this.isConnected) {
+                    this.elements.status.textContent = 'Connected';
+                    this.elements.status.className = 'status connected';
+                    this.elements.connectBtn.disabled = true;
+                    this.elements.disconnectBtn.disabled = false;
+                    this.elements.subscribeBtn.disabled = false;
+                    this.elements.unsubscribeBtn.disabled = false;
+                } else {
+                    this.elements.status.textContent = 'Disconnected';
+                    this.elements.status.className = 'status disconnected';
+                    this.elements.connectBtn.disabled = false;
+                    this.elements.disconnectBtn.disabled = true;
+                    this.elements.subscribeBtn.disabled = true;
+                    this.elements.unsubscribeBtn.disabled = true;
+                }
+            }
+
+            connect() {
+                try {
+                    this.addMessage('Attempting to connect...');
+                    this.ws = new WebSocket('ws://localhost:8080');
+
+                    this.ws.onopen = () => {
+                        this.isConnected = true;
+                        this.addMessage('Connected to Twelve Data WebSocket Proxy');
+                        this.updateUI();
+                    };
+
+                    this.ws.onmessage = (event) => {
+                        this.handleMessage(event);
+                    };
+
+                    this.ws.onclose = () => {
+                        this.isConnected = false;
+                        this.addMessage('Disconnected from proxy server');
+                        this.updateUI();
+                    };
+
+                    this.ws.onerror = (error) => {
+                        this.addMessage(`WebSocket error: ${error.message || 'Connection failed'}`, 'error');
+                    };
+
+                } catch (error) {
+                    this.addMessage(`Connection error: ${error.message}`, 'error');
+                }
+            }
+
+            disconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+            }
+
+            handleMessage(event) {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.event === 'price') {
+                        this.addMessage(`${data.symbol}: $${data.price}`, 'price-update');
+                    } else if (data.event === 'subscribe-status') {
+                        this.addMessage(`Subscribe status: ${JSON.stringify(data)}`);
+                    } else {
+                        this.addMessage(`Received: ${JSON.stringify(data)}`);
+                    }
+                } catch (error) {
+                    this.addMessage(`Error parsing message: ${error.message}`, 'error');
+                }
+            }
+
+            subscribe() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const symbols = this.elements.symbolInput.value.trim();
+                    if (symbols) {
+                        const message = {
+                            action: 'subscribe',
+                            params: { symbols: symbols }
+                        };
+                        this.ws.send(JSON.stringify(message));
+                        this.addMessage(`Subscribed to: ${symbols}`);
+                    } else {
+                        this.addMessage('Please enter symbols to subscribe', 'error');
+                    }
+                } else {
+                    this.addMessage('Not connected to server', 'error');
+                }
+            }
+
+            unsubscribe() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const symbols = this.elements.symbolInput.value.trim();
+                    if (symbols) {
+                        const message = {
+                            action: 'unsubscribe',
+                            params: { symbols: symbols }
+                        };
+                        this.ws.send(JSON.stringify(message));
+                        this.addMessage(`Unsubscribed from: ${symbols}`);
+                    } else {
+                        this.addMessage('Please enter symbols to unsubscribe', 'error');
+                    }
+                } else {
+                    this.addMessage('Not connected to server', 'error');
+                }
+            }
+
+            clearMessages() {
+                this.elements.messages.innerHTML = '';
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            const client = new WebSocketClient();
+
+            // Add clear messages functionality
+            const clearBtn = document.createElement('button');
+            clearBtn.textContent = 'Clear Messages';
+            clearBtn.style.marginLeft = 'auto';
+            clearBtn.addEventListener('click', () => client.clearMessages());
+
+            const lastControlGroup = document.querySelector('.control-group:last-child');
+            lastControlGroup.appendChild(clearBtn);
+
+            // Welcome message
+            client.addMessage('Welcome! Click Connect to start receiving real-time stock data.');
+        });
+    </script>
+</body>
+</html>
