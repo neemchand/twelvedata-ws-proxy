@@ -148,6 +148,15 @@ class TwelveDataConnection {
             this.ws.close();
         }
     }
+
+    // Health check helper methods
+    isConnected() {
+        return this.ws && this.ws.readyState === WebSocket.OPEN;
+    }
+
+    isConnecting() {
+        return this.ws && this.ws.readyState === WebSocket.CONNECTING;
+    }
 }
 
 module.exports = TwelveDataConnection;

@@ -3,6 +3,7 @@ require('dotenv').config();
 const CONFIG = {
     API_KEY: process.env.TWELVEDATA_API_KEY,
     WS_PORT: process.env.WS_PORT || 8080,
+    HEALTH_CHECK_PORT: process.env.HEALTH_CHECK_PORT || 8081,
     WS_URL: `wss://ws.twelvedata.com/v1/quotes/price?apikey=${process.env.TWELVEDATA_API_KEY}`,
     MAX_RECONNECT_ATTEMPTS: 10,
     RECONNECT_INTERVAL_MS: 5000,
