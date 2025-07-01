@@ -5,10 +5,26 @@ class ProxyServer {
     constructor(twelveDataConnection) {
         this.twelveDataConnection = twelveDataConnection;
         this.connectedClients = new Set();
-        this.wss = new WebSocket.Server({ port: CONFIG.WS_PORT }, () => {
-            console.log(`[Proxy] Client WebSocket Server listening on ws://localhost:${CONFIG.WS_PORT}`);
-        });
-        this.setupConnectionHandler();
+
+        try {
+            this.wss = new WebSocket.Server({ port: CONFIG.WS_PORT }, () => {
+                console.log(`[Proxy] Client WebSocket Server listening on ws://localhost:${CONFIG.WS_PORT}`);
+            });
+
+            this.wss.on('error', (error) => {
+                if (error.code === 'EADDRINUSE') {
+                    console.error(`[Proxy] Port ${CONFIG.WS_PORT} is already in use. Please wait a moment and try again.`);
+                    process.exit(1);
+                } else {
+                    console.error('[Proxy] WebSocket Server error:', error);
+                }
+            });
+
+            this.setupConnectionHandler();
+        } catch (error) {
+            console.error('[Proxy] Failed to create WebSocket server:', error.message);
+            throw error;
+        }
     }
 
     setupConnectionHandler() {
