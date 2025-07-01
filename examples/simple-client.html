@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Proxy Test Client</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; }
+        .status { margin-bottom: 15px; padding: 10px; border-radius: 5px; }
+        .status.connecting { background-color: #fff3cd; color: #856404; }
+        .status.open { background-color: #d4edda; color: #155724; }
+        .status.closed { background-color: #f8d7da; color: #721c24; }
+        .status.error { background-color: #f8d7da; color: #721c24; font-weight: bold; }
+        .price-display { font-size: 1.5em; font-weight: bold; margin-top: 10px; }
+        .price-symbol { color: #007bff; }
+        .price-value { color: #28a745; }
+        pre { background-color: #f4f4f4; border: 1px solid #ddd; padding: 10px; max-height: 200px; overflow-y: scroll; white-space: pre-wrap; word-wrap: break-word; }
+        button { padding: 10px 15px; margin-right: 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; }
+        button#closeBtn { background-color: #dc3545; color: white; }
+        button#connectBtn { background-color: #007bff; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket Proxy Test Client</h1>
+
+        <div id="status" class="status connecting">Connecting...</div>
+
+        <p>Subscribing to: <strong>AAPL, GOOGL, BTC/USD, Infy:NSE</strong></p>
+
+        <div class="price-display">
+            <span class="price-symbol">AAPL:</span> <span class="price-value" id="aapl-price">--</span><br>
+            <span class="price-symbol">GOOGL:</span> <span class="price-value" id="googl-price">--</span><br>
+            <span class="price-symbol">BTC/USD:</span> <span class="price-value" id="btc-usd-price">--</span><br>
+            <span class="price-symbol">Infy:NSE:</span> <span class="price-value" id="infy-nse-price">--</span>
+        </div>
+        <p>Last update: <span id="last-update">--</span></p>
+
+        <button id="connectBtn" disabled>Connect</button>
+        <button id="closeBtn">Close Connection</button>
+
+        <h3>Raw Messages:</h3>
+        <pre id="messages"></pre>
+    </div>
+
+    <script>
+        const proxyUrl = 'ws://localhost:8080'; // <-- Make sure this matches your proxy's WS_PORT
+        let ws;
+
+        const statusDiv = document.getElementById('status');
+        const aaplPriceElem = document.getElementById('aapl-price');
+        const googlPriceElem = document.getElementById('googl-price');
+        const btcUsdPriceElem = document.getElementById('btc-usd-price');
+        const infyNsePriceElem = document.getElementById('infy-nse-price'); // Added for Infy:NSE
+        const lastUpdateElem = document.getElementById('last-update');
+        const messagesPre = document.getElementById('messages');
+        const connectBtn = document.getElementById('connectBtn');
+        const closeBtn = document.getElementById('closeBtn');
+
+        const symbolsToSubscribe = ['AAPL', 'GOOGL', 'BTC/USD', 'Infy:NSE']; // Added Infy:NSE
+
+        function updateStatus(status) {
+            statusDiv.className = `status ${status}`;
+            statusDiv.textContent = `Status: ${status.toUpperCase()}`;
+            if (status === 'open') {
+                connectBtn.disabled = true;
+                closeBtn.disabled = false;
+            } else if (status === 'closed' || status === 'error') {
+                connectBtn.disabled = false;
+                closeBtn.disabled = true;
+            } else { // connecting, closing
+                connectBtn.disabled = true;
+                closeBtn.disabled = true;
+            }
+        }
+
+        function appendMessage(message) {
+            messagesPre.textContent = JSON.stringify(message, null, 2) + "\n" + messagesPre.textContent;
+            // Limit messages to avoid memory issues in long run
+            const lines = messagesPre.textContent.split('\n');
+            if (lines.length > 50) {
+                messagesPre.textContent = lines.slice(0, 50).join('\n');
+            }
+        }
+
+        function connectWebSocket() {
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                console.log('WebSocket already connected or connecting.');
+                return;
+            }
+
+            updateStatus('connecting');
+            messagesPre.textContent = ''; // Clear previous messages
+            aaplPriceElem.textContent = '--';
+            googlPriceElem.textContent = '--';
+            btcUsdPriceElem.textContent = '--';
+            infyNsePriceElem.textContent = '--'; // Clear Infy:NSE price on reconnect
+            lastUpdateElem.textContent = '--';
+
+            ws = new WebSocket(proxyUrl);
+
+            ws.onopen = (event) => {
+                console.log("WebSocket connection opened to proxy:", event);
+                updateStatus('open');
+
+                // Send subscribe event to the proxy
+                const subscribeMessage = {
+                    "action": "subscribe",
+                    "params": {
+                        "symbols": symbolsToSubscribe.join(',')
+                    }
+                };
+                ws.send(JSON.stringify(subscribeMessage));
+                console.log("Sent subscribe message to proxy:", subscribeMessage);
+                appendMessage(subscribeMessage);
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log("Received data from proxy:", data);
+                appendMessage(data);
+
+                if (data.event === "price") {
+                    const price = parseFloat(data.price).toFixed(4); // Format price
+                    switch (data.symbol) {
+                        case 'AAPL':
+                            aaplPriceElem.textContent = price;
+                            break;
+                        case 'GOOGL':
+                            googlPriceElem.textContent = price;
+                            break;
+                        case 'BTC/USD':
+                            btcUsdPriceElem.textContent = price;
+                            break;
+                        case 'Infy:NSE': // Handle Infy:NSE price updates
+                            infyNsePriceElem.textContent = price;
+                            break;
+                    }
+                    lastUpdateElem.textContent = new Date(data.timestamp * 1000).toLocaleTimeString();
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error("WebSocket Error:", error);
+                updateStatus('error');
+            };
+
+            ws.onclose = (event) => {
+                console.log("WebSocket connection closed:", event);
+                updateStatus('closed');
+                if (!event.wasClean) {
+                    console.error("Connection closed unexpectedly. Code:", event.code, "Reason:", event.reason);
+                }
+            };
+        }
+
+        function closeWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close(1000, 'Client closed connection'); // 1000 is normal closure
+                updateStatus('closing');
+            } else {
+                console.log('WebSocket is not open to close.');
+            }
+        }
+
+        // Initial connection when the page loads
+        connectWebSocket();
+
+        // Event listeners for buttons
+        connectBtn.addEventListener('click', connectWebSocket);
+        closeBtn.addEventListener('click', closeWebSocket);
+
+    </script>
+</body>
+</html>
