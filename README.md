@@ -28,6 +28,7 @@ This project is built using the excellent APIs and documentation provided by:
 - **Smart Subscription Management**: Automatically manages subscriptions to avoid duplicate requests
 - **Auto-reconnection**: Robust connection handling with automatic reconnection on failures
 - **Heartbeat Monitoring**: Keeps connections alive with periodic heartbeat messages
+- **Health Check Endpoints**: HTTP endpoints for monitoring server status and metrics
 - **Graceful Shutdown**: Properly closes connections and cleans up resources
 
 ## Architecture
@@ -38,6 +39,7 @@ The project is structured into modular components:
 - **`src/config.js`**: Configuration management and validation
 - **`src/TwelveDataConnection.js`**: Handles connection to Twelve Data WebSocket API
 - **`src/ProxyServer.js`**: Manages client connections and message routing
+- **`src/HealthCheck.js`**: HTTP server for health monitoring and metrics
 
 ## 📋 Prerequisites
 
@@ -160,6 +162,51 @@ ws.onmessage = (event) => {
 }
 ```
 
+## Health Check Endpoints
+
+The server provides HTTP endpoints for monitoring and health checks on port 8081 (configurable):
+
+### Basic Health Check
+```bash
+curl http://localhost:8081/health
+```
+
+Returns basic health status:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-07-01T14:00:00.000Z",
+  "uptime": "5m 23s",
+  "version": "1.0.0"
+}
+```
+
+### Detailed Status
+```bash
+curl http://localhost:8081/status
+```
+
+Returns comprehensive system status including service details and memory usage.
+
+### Metrics
+```bash
+curl http://localhost:8081/metrics
+```
+
+Returns performance metrics in a format suitable for monitoring systems:
+```json
+{
+  "timestamp": "2025-07-01T14:00:00.000Z",
+  "uptime_seconds": 323,
+  "connected_clients": 2,
+  "subscribed_symbols": 5,
+  "twelve_data_connected": true,
+  "memory_usage_mb": 45,
+  "heap_used_mb": 12,
+  "heap_total_mb": 18
+}
+```
+
 ## Configuration
 
 Environment variables can be set in the `.env` file:
@@ -168,6 +215,7 @@ Environment variables can be set in the `.env` file:
 |----------|-------------|---------|
 | `TWELVEDATA_API_KEY` | Your Twelve Data API key | Required |
 | `WS_PORT` | Port for the WebSocket server | 8080 |
+| `HEALTH_CHECK_PORT` | Port for the health check HTTP server | 8081 |
 
 ## Development
 
@@ -177,7 +225,8 @@ Environment variables can be set in the `.env` file:
 ├── src/
 │   ├── config.js          # Configuration and validation
 │   ├── TwelveDataConnection.js  # Twelve Data WebSocket client
-│   └── ProxyServer.js     # Client connection manager
+│   ├── ProxyServer.js     # Client connection manager
+│   └── HealthCheck.js     # Health monitoring HTTP server
 ├── .env.example           # Environment variables template
 ├── package.json           # Dependencies and scripts
 └── README.md             # This file
